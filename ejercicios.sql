@@ -65,7 +65,7 @@ BEGIN
         SELECT p.pasaporte FROM Cuenta c
         JOIN Persona p ON p.pasaporte = c.idPersona
         JOIN Banco b ON b.id = c.idBanco
-        WHERE b.pais != 'Argentina' AND c.idMoneda = 'US'
+        WHERE b.pais <> 'Argentina' AND c.idMoneda = 'US'
         GROUP BY p.pasaporte
         HAVING COUNT(c.id) >= 3
     ) AS CuentasMas3 ON p.pasaporte = CuentasMas3.pasaporte
@@ -81,12 +81,28 @@ Crear un SP que reciba por parametro un pasaporte y muestre las cuentas asociada
 Escribir la sentencia que prueba el correcto funcionamiento.
 */
 
+/*
 CREATE PROCEDURE CuentasPorPasaporte
-    @Pajaporte
+    @Pasaporte char(15)
 AS
 BEGIN
-    
+    IF EXISTS (SELECT 1 FROM Persona WHERE pasaporte = @Pasaporte)
+    BEGIN
+        SELECT * FROM Cuenta c
+        JOIN Persona p ON p.pasaporte = c.idPersona
+        WHERE
+            p.pasaporte = @Pasaporte;
+    END
+    ELSE
+    BEGIN
+        RAISERROR('El pasaporte "%s" no existe en la base de datos.', 16, 1, @Pasaporte);
+    END
 END;
+
+EXEC CuentasPorPasaporte '5';
+DROP PROCEDURE CuentasPorPasaporte;
+
+*/
 
 /*8-
 Crear un Trigger que realice el respaldo de los datos de un Banco cuando el mismo es eliminado. El trigger no debe 
@@ -95,8 +111,46 @@ Se debe crear una tabla "banco_respaldo"
 Escribir las sentencias que prueban el correcto funcionamiento.
 */
 
+/*
+CREATE TRIGGER respaldar_banco
+ON Banco
+INSTEAD OF DELETE
+AS
+BEGIN
+    IF EXISTS (SELECT 1 FROM deleted d
+               JOIN Opera o ON d.id = o.idBanco
+               WHERE o.idMoneda = 'AR')
+    BEGIN
+        RAISERROR ('ERROR: No se puede eliminar un banco que opera con "PESO ARGENTINO".', 16, 1);
+    END
+    ELSE
+    BEGIN
+        IF NOT EXISTS (SELECT * FROM sys.tables s WHERE s.name = 'banco_respaldo')
+        BEGIN
+            CREATE TABLE banco_respaldo(id int primary key, nombre varchar(50), pais char(50));
+        END
+
+        INSERT INTO banco_respaldo(id, nombre, pais)
+        SELECT * FROM deleted d
+
+        DELETE b from Banco b
+        JOIN deleted d ON b.id = d.id
+
+        PRINT 'Operación completada: Banco(s) eliminado(s) y respaldado(s) correctamente.';
+    END
+END;
+DROP TRIGGER respaldar_banco
+DELETE FROM Banco WHERE id = 4;
+
+SELECT * FROM Banco;
+*/
+
+
 /*9-
 Crear un Trigger que actualice el id de moneda en las tablas opera y cuenta para cuando un codigo de moneda 
 sea actualizado en la tabla moneda.
 Escribir la sentencia que prueba el correcto funcionamiento.
 */
+
+CREATE TRIGGER t_actualizarIdMoneda
+ON moneda
